@@ -86,5 +86,5 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if(Notification.permission!=="granted") Notification.requestPermission();
 
-  setInterval(fetchData, 300); // fetch ทุก 0.3 วินาที
+ setInterval(fetchData, 1000);
 });
