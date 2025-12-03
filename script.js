@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const statusIcon = document.getElementById("statusIcon");
   const statusText = document.getElementById("statusText");
 
-  const R4_IP = "http://10.147.64.147"; // เปลี่ยนเป็น IP R4 จริง
+  const R4_IP = "10.147.64.147"; // เปลี่ยนเป็น IP R4 จริง
   let prevFall = false;
 
   function addTableRow(data) {
