@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const statusIcon = document.getElementById("statusIcon");
   const statusText = document.getElementById("statusText");
 
-  const R4_IP = "10.147.64.147"; // เปลี่ยนเป็น IP R4 จริง
+  const R4_IP = "http://10.147.64.147"; // IP ของ R4
   let prevFall = false;
 
   function addTableRow(data) {
@@ -53,6 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function fetchData() {
     try {
       const res = await fetch(R4_IP + "/data");
+      if(!res.ok) throw new Error("HTTP error " + res.status);
       const data = await res.json();
 
       const now = new Date();
@@ -85,5 +86,5 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if(Notification.permission!=="granted") Notification.requestPermission();
 
-  setInterval(fetchData, 300);
+  setInterval(fetchData, 300); // fetch ทุก 0.3 วินาที
 });
