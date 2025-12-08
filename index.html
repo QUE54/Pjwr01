@@ -2,31 +2,192 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fall Monitor 3.6</title>
-<link rel="stylesheet" href="style.css">
+<title>Fall Detection Dashboard</title>
+<style>
+  body{
+    font-family: sans-serif;
+    background:#eef3f9;
+    margin:0;
+    padding:20px;
+    color:#333;
+  }
+
+  h1{
+    text-align:center;
+    margin-bottom:10px;
+    color:#1a4c8f;
+  }
+
+  #statusBox{
+    margin:auto;
+    width:280px;
+    padding:20px;
+    border-radius:18px;
+    text-align:center;
+    color:white;
+    font-size:22px;
+    font-weight:bold;
+    transition:0.2s;
+  }
+  .normal{ background:#4ba3ff; }
+  .fall{ background:#ff4c4c; }
+  .stand{ background:#41d27c; }
+
+  #liveData{
+    margin:20px auto;
+    width:90%;
+    background:white;
+    padding:15px;
+    border-radius:15px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.1);
+  }
+  .valBox{
+    display:flex;
+    justify-content:space-between;
+    margin:8px 0;
+    font-size:18px;
+  }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:15px;
+    background:white;
+    border-radius:12px;
+    overflow:hidden;
+  }
+  th,td{
+    padding:8px;
+    text-align:center;
+    font-size:14px;
+  }
+  th{
+    background:#dfe9f5;
+  }
+  tr:nth-child(even){
+    background:#f6faff;
+  }
+  .fall-row{ background:#ffe5e5 !important; }
+  .stand-row{ background:#e9ffe9 !important; }
+
+</style>
 </head>
 <body>
-<div class="container">
-  <div id="statusSummary" class="status-summary">
-    <span id="statusIcon">💤</span>
-    <p id="statusText">ปกติ</p>
-  </div>
-  <div id="logContainer" class="log-container">
-    <table id="logTable">
-      <thead>
-        <tr>
-          <th>สถานะ</th>
-          <th>แรง (G)</th>
-          <th>มุม (°)</th>
-          <th>วันที่</th>
-          <th>เวลา</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
+
+<h1>ระบบตรวจจับการหกล้ม</h1>
+
+<div id="statusBox" class="normal">สถานะ: ปกติ</div>
+
+<div id="liveData">
+  <div class="valBox"><span>แรง G:</span> <span id="gVal">0</span></div>
+  <div class="valBox"><span>มุมเอียง:</span> <span id="angleVal">0°</span></div>
+  <div class="valBox"><span>เวลา:</span> <span id="timeVal">-</span></div>
 </div>
-<script src="script.js"></script>
+
+<h2 style="text-align:center;color:#1a4c8f;">ประวัติ</h2>
+<table id="logTable">
+  <thead>
+    <tr>
+      <th>สถานะ</th>
+      <th>แรง G</th>
+      <th>มุม</th>
+      <th>เวลา</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<audio id="alertSound">
+  <source src="https://www.soundjay.com/buttons/sounds/beep-07.mp3" type="audio/mpeg">
+</audio>
+
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script>
+  const HOST = "wss://0ab8ca048c0e477ca807c00e9c4b2b24.s1.eu.hivemq.cloud:8884/mqtt";
+  const MQTT_USER = "Quewr";
+  const MQTT_PASS = "Warin007";
+
+  const client = mqtt.connect(HOST, {
+    username: MQTT_USER,
+    password: MQTT_PASS,
+  });
+
+  const statusBox = document.getElementById("statusBox");
+  const gVal = document.getElementById("gVal");
+  const angleVal = document.getElementById("angleVal");
+  const timeVal = document.getElementById("timeVal");
+  const logBody = document.querySelector("#logTable tbody");
+  const alertSound = document.getElementById("alertSound");
+
+  let logData = [];
+
+  client.on("connect", ()=>{
+    console.log("MQTT Connected");
+    client.subscribe("r4/data");
+  });
+
+  client.on("message", (topic, msg)=>{
+    const data = JSON.parse(msg.toString());
+
+    const force = data.totalG;
+    const angle = Math.max(Math.abs(data.angleX), Math.abs(data.angleY));
+    const fall = data.fall;
+
+    const status = fall ? "fall" : (angle < 25 ? "normal" : "stand");
+    const now = new Date().toLocaleTimeString("th-TH");
+
+    // UI update
+    gVal.textContent = force.toFixed(2);
+    angleVal.textContent = angle.toFixed(1) + "°";
+    timeVal.textContent = now;
+
+    // Update status box
+    statusBox.className = status;
+    statusBox.textContent =
+      status === "fall" ? "สถานะ: ล้ม!" :
+      status === "stand" ? "สถานะ: ลุกแล้ว" :
+      "สถานะ: ปกติ";
+
+    if(status === "fall") alertSound.play();
+
+    addHistory(status, force, angle, now);
+  });
+
+  function addHistory(status, g, angle, time){
+    const row = {
+      status,
+      g: g.toFixed(2),
+      angle: angle.toFixed(1),
+      time
+    };
+    logData.push(row);
+    cleanOldRows();
+    renderTable();
+  }
+
+  function cleanOldRows(){
+    const oneMinAgo = Date.now() - 60000;
+    logData = logData.filter(r=>{
+      return (new Date("2000-01-01 " + r.time)).getTime() > oneMinAgo;
+    });
+  }
+
+  function renderTable(){
+    logBody.innerHTML = "";
+    logData.slice().reverse().forEach(r=>{
+      const tr = document.createElement("tr");
+      if(r.status==="fall") tr.classList.add("fall-row");
+      if(r.status==="stand") tr.classList.add("stand-row");
+      tr.innerHTML = `
+        <td>${r.status==="fall"?"ล้ม!":r.status==="stand"?"ลุกแล้ว":"ปกติ"}</td>
+        <td>${r.g}</td>
+        <td>${r.angle}</td>
+        <td>${r.time}</td>
+      `;
+      logBody.appendChild(tr);
+    });
+  }
+
+</script>
 </body>
 </html>
